@@ -8,3 +8,14 @@
 - 🎨 支持多种格式的图片输入
 - 🔄 非线性色彩映射，保持原始色彩关系
 - ⚡ 快速且易于使用
+
+# Tunnel
+
+English
+
+A utility tool for non-linear color style transfer, enabling sophisticated color palette transformation while maintaining the original aesthetic relationships.
+Features
+
+- 🎨 Support for multiple image formats
+- 🔄 Non-linear color mapping with preservation of original color relationships
+- ⚡ Fast and easy to use
