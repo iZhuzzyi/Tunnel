@@ -177,7 +177,7 @@ def generate_lut_chunk(model, poly, grid_size, start, end):
     return chunk
 
 
-def generate_lut_nonlinear(model, poly, grid_size=33, conn=None):
+def generate_lut_nonlinear(model, poly, grid_size=65, conn=None):
     log_message(conn, "生成 LUT，请稍候...")
     total_steps = grid_size ** 3
     step_size = total_steps // 16  # 每个进程处理的步数
@@ -256,19 +256,43 @@ class ColorTransferApp:
             text="预览颜色转换效果（很慢）",
             variable=self.preview_var
         )
-        self.preview_checkbox.grid(row=0, column=0, columnspan=2, sticky='w', padx=5)  # 复选框保留 columnspan=2
+        self.preview_checkbox.grid(row=0, column=1, columnspan=2, sticky='w', padx=5)  # 复选框保留 columnspan=2
 
         # Buttons for selecting images
+
+        self.about_btn = ttkb.Button(button_frame, text="关于Tunnel", command=self.about)
+        self.about_btn.grid(row=1, column=0, padx=5)
+
         self.select_img1_btn = ttkb.Button(button_frame, text="选择主图像", command=self.load_image1)
-        self.select_img1_btn.grid(row=1, column=0, padx=5)
+        self.select_img1_btn.grid(row=1, column=1, padx=5)
 
         self.select_img2_btn = ttkb.Button(button_frame, text="选择目标图像", command=self.load_image2)
-        self.select_img2_btn.grid(row=1, column=1, padx=5)
+        self.select_img2_btn.grid(row=1, column=2, padx=5)
 
         # Button to start processing
         self.process_btn = ttkb.Button(button_frame, text="开始转换", command=self.start_processing)
-        self.process_btn.grid(row=1, column=2, padx=5)
+        self.process_btn.grid(row=1, column=3, padx=5)
 
+        # Add precision selection combobox
+        precision_options = {
+            "33点精度": 33,
+            "65点精度": 65
+        }
+        self.precision_var = tk.IntVar(value=33)  # 默认值设为33
+        self.precision_combo = ttkb.Combobox(
+            button_frame,
+            values=list(precision_options.keys()),
+            width=10,
+            state="readonly",
+        )
+        self.precision_combo.set("33点精度")  # 设置默认显示文本
+        self.precision_combo.grid(row=1, column=4, padx=5)
+
+        # 绑定选择改变事件
+        def on_precision_select(event):
+            selected_text = self.precision_combo.get()
+            self.precision_var.set(precision_options[selected_text])
+        self.precision_combo.bind("<<ComboboxSelected>>", on_precision_select)
         # Text box for logs
         self.log_text = tk.Text(root, width=100, height=10, bg='lightyellow')
         self.log_text.grid(row=3, column=0, columnspan=3, pady=10)
@@ -308,7 +332,7 @@ class ColorTransferApp:
             messagebox.showerror("错误", "请先选择两张图像")
             return
         self.conn.send(('process', self.img1, self.img2, self.camera_a_name.get(), self.camera_b_name.get(),
-                        self.preview_var.get()))
+                        self.preview_var.get(), self.precision_var.get()))
 
     def check_for_messages(self):
         while self.conn.poll():
@@ -317,13 +341,16 @@ class ColorTransferApp:
                 self.log(msg_content)
         self.root.after(100, self.check_for_messages)
 
+    def about(self):
+        messagebox.showinfo("关于Tunnel", "Tunnel可以用于处理色卡图片之间的色彩风格迁移。\n开源软件，以MIT许可证分发。\n本软件按“原样”提供，不包含任何形式的保证，无论是明示的还是暗示的，包括但不限于适销性、特定用途的适用性和不侵权的保证。在任何情况下，开发者均不对因使用本软件而产生的任何形式的损害或其他责任负责，无论这些损害是基于合同、侵权或其他法律理论的。\n本项目开源代码仓库：https://github.com/iZhuzzyi/Tunnel\n用于贡献代码、分支其他版本或提交意见与功能要求。")
 
 def process_images(conn):
     while True:
         msg = conn.recv()
         if msg[0] == 'process':
             test_img = read_color_checker_image("TDTI.jpeg")
-            img1, img2, camera_a, camera_b, preview_enabled = msg[1], msg[2], msg[3], msg[4], msg[5]
+            img1, img2, camera_a, camera_b, preview_enabled, precision_var = msg[1], msg[2], msg[3], msg[4], msg[5], msg[6]
+            log_message(conn, str(preview_enabled)+"   "+str(precision_var))
             corners = get_color_checker_corners(img1)
             centers = get_color_block_centers(corners)
             if img1.shape != img2.shape:
@@ -368,8 +395,8 @@ def process_images(conn):
                                                      initialfile=f"{camera_b}_to_{camera_a}.cube")
 
             # Start LUT generation in parallel
-            lut1 = generate_lut_nonlinear(model1, poly1, conn=conn)
-            lut2 = generate_lut_nonlinear(model2, poly2, conn=conn)
+            lut1 = generate_lut_nonlinear(model1, poly1, grid_size=precision_var, conn=conn)
+            lut2 = generate_lut_nonlinear(model2, poly2, grid_size=precision_var, conn=conn)
 
             save_cube_lut(lut1, lut1_file, conn=conn)
             save_cube_lut(lut2, lut2_file, conn=conn)
